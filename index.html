@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Fictionel</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #1c1c1c;
+      color: #f2f2f2;
+      text-align: center;
+    }
+    h1 { color: #00ffcc; font-size: 3em; }
+    .grid {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      margin: 10px 0;
+    }
+    .tile {
+      width: 50px;
+      height: 50px;
+      font-size: 24px;
+      line-height: 50px;
+      border: 2px solid #444;
+      background: #222;
+      text-transform: uppercase;
+    }
+    .correct { background: #4caf50; }
+    .present { background: #ffc107; }
+    .absent  { background: #555; }
+    input[type=text] {
+      width: 250px;
+      font-size: 20px;
+      text-transform: uppercase;
+    }
+    select, button {
+      margin: 10px;
+      font-size: 16px;
+    }
+    #rank {
+      margin-top: 20px;
+      font-size: 1.2em;
+      color: #90ee90;
+    }
+    #sharelink {
+      margin-top: 10px;
+      font-size: 0.9em;
+      color: #bbb;
+    }
+  </style>
+</head>
+<body>
+  <h1>Fictionel</h1>
+  <div>
+    <label>Theme:</label>
+    <select id="themeSelect" onchange="updateURL()">
+      <option value="minecraft">Minecraft</option>
+      <option value="fortnite">Fortnite</option>
+      <option value="mcu">MCU</option>
+      <option value="brawlstars">Brawl Stars</option>
+      <option value="zelda">Zelda</option>
+    </select>
+    <input type="date" id="dateSelect" onchange="updateURL()" />
+  </div>
+
+  <div id="board"></div>
+  <input type="text" id="guess" placeholder="Your guess" />
+  <button onclick="submitGuess()">Submit</button>
+  <p id="message"></p>
+  <p id="rank"></p>
+  <p id="sharelink"></p>
+
+  <script>
+    const words = {
+      minecraft: ["creeper", "diamond", "beacon", "notch", "redstone", "elytra", "villager", "zomb", "end", "nether"],
+      fortnite: ["storm", "slurp", "emote", "build", "llama", "dub", "loot", "victory", "tilted", "reboot"],
+      mcu: ["snap", "ironman", "thor", "avengers", "hulk", "wanda", "quantum", "loki", "ultron", "strange"],
+      brawlstars: ["colt", "leon", "nita", "buzz", "tick", "fang", "nani", "edgar", "surge", "spike"],
+      zelda: ["link", "ganon", "hyrule", "triforce", "epona", "rupee", "zelda", "master", "ocarina", "midna"]
+    };
+
+    let currentWord = "";
+    let attempts = [];
+    const maxAttempts = 6;
+
+    function getDailyWord(theme, dateStr) {
+      const list = words[theme];
+      const date = new Date(dateStr);
+      const seed = date.getFullYear() * 10000 + (date.getMonth() + 1) * 100 + date.getDate();
+      const index = seed % list.length;
+      return list[index].toLowerCase();
+    }
+
+    function getQueryParams() {
+      const params = {};
+      const queryString = window.location.search;
+      if (!queryString) return params;
+      queryString.substring(1).split("&").forEach(pair => {
+        const [key, value] = pair.split("=");
+        params[key] = decodeURIComponent(value);
+      });
+      return params;
+    }
+
+    function updateURL() {
+      const theme = document.getElementById("themeSelect").value;
+      const date = document.getElementById("dateSelect").value;
+      const query = `?theme=${theme}&date=${date}`;
+      history.replaceState({}, "", location.pathname + query);
+      startGame(); // reload
+    }
+
+    function startGame() {
+      const params = getQueryParams();
+      const theme = params.theme || "minecraft";
+      const date = params.date || new Date().toISOString().slice(0, 10);
+
+      document.getElementById("themeSelect").value = theme;
+      document.getElementById("dateSelect").value = date;
+
+      currentWord = getDailyWord(theme, date);
+      attempts = [];
+      document.getElementById("board").innerHTML = "";
+      document.getElementById("message").textContent = "";
+      document.getElementById("guess").disabled = false;
+      document.getElementById("rank").textContent = "";
+      document.getElementById("guess").value = "";
+      document.getElementById("guess").setAttribute("placeholder", `${currentWord.length}-letter word`);
+
+      document.getElementById("sharelink").textContent =
+        `🔗 Share: https://fictionel.idk/?theme=${theme}&date=${date}`;
+    }
+
+    function renderBoard() {
+      const board = document.getElementById("board");
+      board.innerHTML = "";
+      for (let attempt of attempts) {
+        const row = document.createElement("div");
+        row.className = "grid";
+        for (let i = 0; i < currentWord.length; i++) {
+          const tile = document.createElement("div");
+          tile.className = "tile";
+          const letter = attempt.word[i]?.toUpperCase() || "";
+          tile.textContent = letter;
+          if (letter.toLowerCase() === currentWord[i]) {
+            tile.classList.add("correct");
+          } else if (currentWord.includes(letter.toLowerCase())) {
+            tile.classList.add("present");
+          } else {
+            tile.classList.add("absent");
+          }
+          row.appendChild(tile);
+        }
+        board.appendChild(row);
+      }
+    }
+
+    function submitGuess() {
+      const input = document.getElementById("guess");
+      const guess = input.value.toLowerCase().trim();
+
+      if (guess.length !== currentWord.length) {
+        document.getElementById("message").textContent = `❗ Must be ${currentWord.length} letters.`;
+        return;
+      }
+
+      attempts.push({ word: guess });
+      renderBoard();
+      input.value = "";
+
+      if (guess === currentWord) {
+        const score = (maxAttempts - attempts.length + 1) * 10;
+        document.getElementById("message").textContent = "🎉 You got it!";
+        document.getElementById("rank").textContent = `⭐ Rank Score: ${score}`;
+        input.disabled = true;
+        return;
+      }
+
+      if (attempts.length >= maxAttempts) {
+        document.getElementById("message").textContent = `❌ Out of tries! Word was "${currentWord.toUpperCase()}".`;
+        input.disabled = true;
+      }
+    }
+
+    window.onload = startGame;
+  </script>
+</body>
+</html>
